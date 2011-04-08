@@ -5,7 +5,7 @@ seattlebars = new Ext.Application({
             application: this,
             city: CITY,
             business_type: BUSINESS_TYPE,
-            yelp_key: YELPKEY
+            yelp_key: YELP_KEY
         });
     },
 
