@@ -11,12 +11,6 @@ sb = new Ext.Application({
         layout    : 'card',
         fullscreen: true,
 
-        dockedItems: [{
-            dock : 'top',
-            xtype: 'toolbar',
-            title: 'City ' + BUSINESS_TYPE
-        }],
-
         items: [
             {
                 id: 'loading',
@@ -25,14 +19,75 @@ sb = new Ext.Application({
                 }
             }, {
                 id: 'list',
-                xtype: 'list',
-                store: null,
-                itemTpl: '<tpl for="."><strong>{name}</strong></tpl>'
+                xtype: 'panel',
+                dockedItems: [{
+                    dock : 'top',
+                    xtype: 'toolbar',
+                    title: ''
+                }],
+                items: {
+                    id: 'datalist',
+                    xtype: 'list',
+                    store: null,
+                    itemTpl: '<tpl for="."><strong>{name}</strong></tpl>',
+                    listeners: {
+                        selectionchange: function (selectionModel, records) {
+                            if (records[0]) {
+                                sb.viewport.setActiveItem(sb.viewport.detail);
+                                sb.viewport.detail.update(records[0].data);
+                            }
+                        }
+                    }
+                }
             }, {
                 id: 'detail',
-                xtype: 'list',
-                store: null,
-                itemTpl: '<tpl for="."><strong>{name}</strong></tpl>'
+                xtype: 'tabpanel',
+                dockedItems: [{
+                    dock : 'top',
+                    xtype: 'toolbar',
+                    title: '',
+                    items: [{
+                        text: 'Back',
+                        ui: 'back',
+                        listeners: {
+                            tap: function () {
+                                sb.viewport.setActiveItem(
+                                    sb.viewport.list,
+                                    {type:'slide', direction: 'right'}
+                                );
+                            }
+                        }
+                    }]
+                }],
+                tabBar: {
+                    dock: 'top',
+                    ui: 'light',
+                    layout: { pack: 'center' }
+                },
+                items: [
+                    {
+                        title: 'Contact',
+                        tpl: '{address1}'
+                    },
+                    {
+                        title: 'Map',
+                        xtype: 'map',
+                        update: function (data) {
+                            this.map.setCenter(new google.maps.LatLng(data.latitude, data.longitude));
+                            this.marker.setPosition(
+                                this.map.getCenter()
+                            );
+                            this.marker.setMap(this.map);
+                        },
+                        marker: new google.maps.Marker()
+                    }
+                ],
+                update: function(data) {
+                    Ext.each(this.items.items, function(item) {
+                        item.update(data);
+                    });
+                    this.getDockedItems()[0].setTitle(data.name);
+                }
             }
         ],
 
@@ -40,10 +95,13 @@ sb = new Ext.Application({
 
         listeners: {
             'afterrender': function () {
-                var viewport = this;
-                var list = viewport.getComponent('list');
-                var loading = viewport.getComponent('loading');
 
+                //some useful references
+                this.list = this.getComponent('list');
+                this.detail = this.getComponent('detail');
+                var loading = this.getComponent('loading'),
+                    datalist = this.list.getComponent('datalist');
+                    viewport = this;
 
                 // do the geolocation locally
                 loading.setStatus("Getting location");
@@ -52,22 +110,20 @@ sb = new Ext.Application({
                     // then use MongoLabs to get the nearest city
                     loading.setStatus("Getting city");
                     sb.getCity(geo, function (city) {
-                        viewport.getDockedItems()[0].setTitle(city + ' ' + BUSINESS_TYPE);
+                        sb.viewport.list.getDockedItems()[0].setTitle(city + ' ' + BUSINESS_TYPE);
 
                         // then use Yelp to get the businesses
                         loading.setStatus("Getting data");
                         sb.getBusinesses(city, function (store) {
 
                             // then bind data and show it
-                            list.bindStore(store);
-                            viewport.setActiveItem(list);
+                            datalist.bindStore(store);
+                            viewport.setActiveItem(sb.viewport.list);
 
                         });
-
                     });
                 });
             }
-
         }
 
     }),
@@ -97,7 +153,7 @@ sb = new Ext.Application({
             autoLoad: true,
             proxy: {
 
-                //the Mongo way:
+                //the MongoLabs way:
                 type: 'ajax',
                 url: 'https://mongolab.com/api/1/databases/cities/collections/cities?q=' +
                     escape(
@@ -135,7 +191,14 @@ sb = new Ext.Application({
         Ext.regModel("Business", {
             fields: [
                 {name: "id", type: "int"},
-                {name: "name", type: "string"}
+                {name: "name", type: "string"},
+                {name: "latitude", type: "string"},
+                {name: "longitude", type: "string"},
+                {name: "address1", type: "string"},
+                {name: "address2", type: "string"},
+                {name: "address3", type: "string"},
+                {name: "phone", type: "string"},
+                {name: "state_code", type: "string"},
             ]
         });
 
@@ -145,7 +208,7 @@ sb = new Ext.Application({
             proxy: {
                 type: 'scripttag',
                 url: 'http://api.yelp.com/business_review_search' +
-                    '?ywsid=' + YELP_KEY+
+                    '?ywsid=' + YELP_KEY +
                     '&term=' + escape(BUSINESS_TYPE) +
                     '&location=' + escape(city)
                 ,
