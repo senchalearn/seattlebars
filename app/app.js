@@ -20,6 +20,7 @@ sb = new Ext.Application({
             }, {
                 id: 'list',
                 xtype: 'panel',
+                layout: 'fit',
                 dockedItems: [{
                     dock : 'top',
                     xtype: 'toolbar',
@@ -226,40 +227,3 @@ sb = new Ext.Application({
     }
 
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    //listeners: {
-    //    selectionchange: function(selectionModel, records) {
-    //        if (records.length>0) {
-    //            Ext.dispatch({
-    //                controller:'businesses',
-    //                action:'detail',
-    //                id: records[0].getId(),
-    //                historyUrl: 'businesses/detail/' + records[0].getId()
-    //            });
-    //        }
-    //    }
-    //}
-    //
-    //
-    //
-    //                           ))
