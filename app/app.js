@@ -1,38 +1,46 @@
 sb = new Ext.Application({
 
+    // this simply instantiates the main viewport control
     launch: function() {
         this.viewport = new this.Viewport();
     },
 
 
+    // the viewport is a panel with a 'card' layout to allow us to slide between list & details (and also loading at first)
     Viewport: Ext.extend(Ext.Panel, {
 
         id        : 'viewport',
         layout    : 'card',
         fullscreen: true,
 
+
         items: [
             {
+                // the loading card
                 id: 'loading',
                 setStatus: function(text) {
+                    // convenience function to update the spinner text
                     this.el.mask(Ext.LoadingSpinner + text, 'x-mask-loading');
                 }
             }, {
+                // the list card
                 id: 'list',
-                xtype: 'panel',
                 layout: 'fit',
                 dockedItems: [{
+                    // list card's toolbar: title gets added in dynamically
                     dock : 'top',
                     xtype: 'toolbar',
                     title: ''
                 }],
                 items: {
+                    // list itself, bound to a store programmatically
                     id: 'datalist',
                     xtype: 'list',
                     store: null,
-                    itemTpl: '<tpl for="."><strong>{name}</strong></tpl>',
+                    itemTpl: '<img class="photo" src="{photo_url}" width="40" height="40"/>{name}<br/><img src="{rating_img_url_small}"/>&nbsp;<small>{address1}</small>',
                     listeners: {
                         selectionchange: function (selectionModel, records) {
+                            // if selection made, slide to detail card
                             if (records[0]) {
                                 sb.viewport.setActiveItem(sb.viewport.detail);
                                 sb.viewport.detail.update(records[0].data);
@@ -41,13 +49,16 @@ sb = new Ext.Application({
                     }
                 }
             }, {
+                // the details card
                 id: 'detail',
                 xtype: 'tabpanel',
                 dockedItems: [{
+                    // also has a toolbar
                     dock : 'top',
                     xtype: 'toolbar',
                     title: '',
                     items: [{
+                        // containing a back button that slides back to list card
                         text: 'Back',
                         ui: 'back',
                         listeners: {
@@ -61,19 +72,38 @@ sb = new Ext.Application({
                     }]
                 }],
                 tabBar: {
+                    // the detail card contains two tabs: address and map
                     dock: 'top',
                     ui: 'light',
                     layout: { pack: 'center' }
                 },
                 items: [
                     {
+                        // textual detail
                         title: 'Contact',
-                        tpl: '{address1}'
+                        styleHtmlContent: true,
+                        cls: 'detail',
+                        tpl: [
+                            '<img class="photo" src="{photo_url}"/>',
+                            '<h2>{name}</h2>',
+                            '<div class="info">',
+                                '{address1}<br/>',
+                                '<img src="{rating_img_url_small}"/>',
+                            '</div>',
+                            '<div class="phone x-button">',
+                                '<a href="tel:{phone}">{phone}</a>',
+                            '</div>',
+                            '<div class="link x-button">',
+                                '<a href="{mobile_url}">Read more</a>',
+                            '</div>'
+                        ]
                     },
                     {
+                        // map detail
                         title: 'Map',
                         xtype: 'map',
                         update: function (data) {
+                            // get centered on bound data
                             this.map.setCenter(new google.maps.LatLng(data.latitude, data.longitude));
                             this.marker.setPosition(
                                 this.map.getCenter()
@@ -84,6 +114,7 @@ sb = new Ext.Application({
                     }
                 ],
                 update: function(data) {
+                    // updating card cascades to update each tab
                     Ext.each(this.items.items, function(item) {
                         item.update(data);
                     });
@@ -96,6 +127,10 @@ sb = new Ext.Application({
 
         listeners: {
             'afterrender': function () {
+                // when the viewport loads, we go through a callback-centric sequence to load up:
+                // a) the geolocation from the browser
+                // b) the name of the nearest city from Mongolabs
+                // c) the local businesses from Yelp
 
                 //some useful references
                 this.list = this.getComponent('list');
@@ -117,7 +152,7 @@ sb = new Ext.Application({
                         loading.setStatus("Getting data");
                         sb.getBusinesses(city, function (store) {
 
-                            // then bind data and show it
+                            // then bind data to list and show it
                             datalist.bindStore(store);
                             viewport.setActiveItem(sb.viewport.list);
 
@@ -129,6 +164,7 @@ sb = new Ext.Application({
 
     }),
 
+    // the functions to perform these steps:
 
     getLocation: function (callback) {
         new Ext.util.GeoLocation({
@@ -148,13 +184,12 @@ sb = new Ext.Application({
             ]
         });
 
-        Ext.Ajax.useDefaultXhrHeader = false; // mongolab cors
+        Ext.Ajax.useDefaultXhrHeader = false; // Mongolab CORS-busting
         Ext.regStore("cities", {
             model: 'City',
             autoLoad: true,
             proxy: {
-
-                //the MongoLabs way:
+                // the MongoDB query escaped into URL
                 type: 'ajax',
                 url: 'https://mongolab.com/api/1/databases/cities/collections/cities?q=' +
                     escape(
@@ -167,16 +202,12 @@ sb = new Ext.Application({
                     '&apiKey=' + MONGOLAB_KEY
                 ,
 
-                //the local way:
-                //type: 'memory',
-                //data: [{"name":DEFAULT_CITY}],
-                //
-
                 reader: {
                     type: 'json'
                 }
             },
             listeners: {
+                // when the city record loads, fire the callback with it
                 'load': function (store, records, success) {
                     callback(records[0].get('name'))
                 }
@@ -200,6 +231,9 @@ sb = new Ext.Application({
                 {name: "address3", type: "string"},
                 {name: "phone", type: "string"},
                 {name: "state_code", type: "string"},
+                {name: "mobile_url", type: "string"},
+                {name: "rating_img_url_small", type: "string"},
+                {name: "photo_url", type: "string"},
             ]
         });
 
@@ -207,6 +241,7 @@ sb = new Ext.Application({
             model: 'Business',
             autoLoad: true,
             proxy: {
+                // call Yelp to get business data
                 type: 'scripttag',
                 url: 'http://api.yelp.com/business_review_search' +
                     '?ywsid=' + YELP_KEY +
@@ -219,6 +254,7 @@ sb = new Ext.Application({
                 }
             },
             listeners: {
+                // when the records load, fire the callback
                 'load': function (store) {
                     callback(store);
                 }
